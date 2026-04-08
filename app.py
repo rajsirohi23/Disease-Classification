@@ -27,13 +27,13 @@ from PIL import Image
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-from tensorflow.keras.applications.mobilenet_v2 import (
-    MobileNetV2,
-    preprocess_input as mobilenet_preprocess,
-    decode_predictions,
-)
+# import tensorflow as tf
+# from tensorflow.keras.models import load_model
+# from tensorflow.keras.applications.mobilenet_v2 import (
+#     MobileNetV2,
+#     preprocess_input as mobilenet_preprocess,
+#     decode_predictions,
+# )
 
 
 
@@ -77,7 +77,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # ═══════════════════════════════════════════════════
 print("[CropMD] Loading crop-disease model ...")
 try:
-    crop_model = load_model(MODEL_PATH)
+    crop_model = load_model(MODEL_PATH, compile=False)
     print("[CropMD] Crop-disease model loaded OK")
     DEEP_MODEL_AVAILABLE = True
 except Exception as e:
