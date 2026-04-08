@@ -1,290 +1,3 @@
-# import os
-# from uuid import uuid4
-
-# from flask import Flask, render_template, request, redirect, url_for, flash
-
-# import numpy as np
-# from PIL import Image
-
-# from tensorflow.keras.models import load_model
-# from tensorflow.keras.layers import InputLayer
-
-# # detector
-# from tensorflow.keras.applications.mobilenet_v2 import (
-#     MobileNetV2,
-#     preprocess_input as mobilenet_preprocess,
-#     decode_predictions,
-# )
-
-# BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-# MODEL_PATH = os.path.join(BASE_DIR, "vgg16_crop_model.h5")
-# UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
-
-# ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
-
-# app = Flask(__name__)
-# app.config["SECRET_KEY"] = "secret"
-# app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-
-# os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# # ------------------------
-# # 🔥 FIX: CUSTOM INPUT LAYER (IMPORTANT)
-# # ------------------------
-# def custom_input_layer(**config):
-#     config.pop("batch_shape", None)
-#     config.pop("optional", None)
-#     return InputLayer(**config)
-
-# # ------------------------
-# # LOAD MODELS
-# # ------------------------
-# print("Loading crop model...")
-
-# model = load_model(
-#     MODEL_PATH,
-#     compile=False,
-#     custom_objects={"InputLayer": custom_input_layer}
-# )
-
-# print("Crop model loaded")
-
-# print("Loading detector...")
-# detector = MobileNetV2(weights="imagenet")
-# print("Detector loaded")
-
-# # ------------------------
-# # CLASS NAMES
-# # ------------------------
-# CLASS_NAMES = [
-# "Apple Black Rot","Apple Healthy","Apple Cedar Rust","Apple Scab",
-# "Blueberry Healthy","Cherry Powdery Mildew","Cherry Healthy",
-# "Corn Cercospora","Corn Rust","Corn Healthy",
-# "Grape Black Rot","Grape Esca","Grape Leaf Blight","Grape Healthy",
-# "Orange Citrus Greening","Peach Bacterial Spot","Peach Healthy",
-# "Pepper Bacterial Spot","Pepper Healthy",
-# "Potato Early Blight","Potato Late Blight","Potato Healthy",
-# "Raspberry Healthy","Soybean Healthy",
-# "Squash Powdery Mildew",
-# "Strawberry Leaf Scorch","Strawberry Healthy",
-# "Tomato Bacterial Spot","Tomato Early Blight","Tomato Late Blight",
-# "Tomato Leaf Mold","Tomato Septoria","Tomato Spider Mites",
-# "Tomato Target Spot","Tomato Mosaic Virus","Tomato Yellow Curl Virus",
-# "Tomato Healthy"
-# ]
-
-# TREATMENT = {
-# "Early Blight":"Use Chlorothalonil",
-# "Late Blight":"Use Mancozeb",
-# "Bacterial Spot":"Use copper fungicide",
-# "Leaf Mold":"Improve airflow",
-# "Powdery Mildew":"Use sulfur spray",
-# "Spider Mites":"Use neem oil",
-# "Black Rot":"Remove infected leaves",
-# "Mosaic Virus":"Remove infected plant",
-# "Target Spot":"Use fungicide"
-# }
-
-# # ------------------------
-# # FILE CHECK
-# # ------------------------
-# def allowed_file(filename):
-#     return "." in filename and filename.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
-
-# # ------------------------
-# # PREPROCESS
-# # ------------------------
-# def preprocess_image(image):
-#     image = image.convert("RGB")
-#     image = image.resize((224,224))
-#     img = np.array(image)/255.0
-#     img = np.expand_dims(img,0)
-#     return img
-
-# # ------------------------
-# # LEAF CHECK
-# # ------------------------
-# def is_leaf(image):
-#     img = np.array(image)
-#     r,g,b = img[:,:,0],img[:,:,1],img[:,:,2]
-#     green = np.sum((g>r) & (g>b))
-#     ratio = green/(img.shape[0]*img.shape[1])
-#     return ratio > 0.02
-
-# # ------------------------
-# # MOBILENET DETECTION
-# # ------------------------
-# def detect_object(image):
-#     img = image.resize((224,224))
-#     img = np.array(img)
-#     img = np.expand_dims(img,0)
-#     img = mobilenet_preprocess(img)
-
-#     preds = detector.predict(img)
-#     decoded = decode_predictions(preds, top=1)[0][0]
-
-#     label = decoded[1]
-#     confidence = decoded[2]
-
-#     print("Detected:", label, confidence)
-
-#     human_words = ["person","man","woman","boy","girl"]
-#     object_words = ["car","phone","laptop","chair","table","dog","cat","bottle"]
-
-#     if label in human_words and confidence > 0.3:
-#         return "human"
-#     if label in object_words and confidence > 0.3:
-#         return "object"
-
-#     return "unknown"
-
-# # ------------------------
-# # INTERPRET RESULT
-# # ------------------------
-# def interpret(label):
-#     if "Healthy" in label:
-#         return {
-#             "headline":"Healthy Crop 🌱",
-#             "status":"healthy",
-#             "disease":None,
-#             "advice":"No disease detected"
-#         }
-
-#     disease = label.split(" ",1)[1]
-#     advice = TREATMENT.get(disease,"Consult expert")
-
-#     return {
-#         "headline":f"Disease detected: {disease}",
-#         "status":"diseased",
-#         "disease":disease,
-#         "advice":advice
-#     }
-
-# # ------------------------
-# # ROUTE
-# # ------------------------
-# @app.route("/",methods=["GET","POST"])
-# def index():
-
-#     if request.method=="POST":
-
-#         if "image" not in request.files:
-#             flash("Upload image","danger")
-#             return redirect(request.url)
-
-#         file=request.files["image"]
-
-#         if file.filename=="":
-#             flash("Select image","warning")
-#             return redirect(request.url)
-
-#         if not allowed_file(file.filename):
-#             flash("Only JPG PNG","danger")
-#             return redirect(request.url)
-
-#         ext=file.filename.rsplit(".",1)[1]
-#         filename=str(uuid4())+"."+ext
-#         path=os.path.join(app.config["UPLOAD_FOLDER"],filename)
-#         file.save(path)
-
-#         try:
-#             image=Image.open(path).convert("RGB")
-
-#             # detect human/object
-#             obj = detect_object(image)
-#             if obj in ["human","object"]:
-#                 interpretation={
-#                     "headline":"Upload crop leaf image",
-#                     "status":"invalid",
-#                     "disease":None,
-#                     "advice":"Human / object detected"
-#                 }
-#                 return render_template("index.html",
-#                     image_url=url_for("static",filename=f"uploads/{filename}"),
-#                     interpretation=interpretation,
-#                     predictions=[],
-#                     top_confidence=0
-#                 )
-
-#             # leaf check
-#             if not is_leaf(image):
-#                 interpretation={
-#                     "headline":"Upload crop leaf image",
-#                     "status":"invalid",
-#                     "disease":None,
-#                     "advice":"No leaf detected"
-#                 }
-#                 return render_template("index.html",
-#                     image_url=url_for("static",filename=f"uploads/{filename}"),
-#                     interpretation=interpretation,
-#                     predictions=[],
-#                     top_confidence=0
-#                 )
-
-#             # predict
-#             img=preprocess_image(image)
-#             preds=model.predict(img)[0]
-
-#             idx=int(np.argmax(preds))
-#             confidence=float(np.max(preds))*100
-
-#             label=CLASS_NAMES[idx]
-#             interpretation=interpret(label)
-
-#             top_predictions=[]
-#             top_idx=preds.argsort()[-3:][::-1]
-
-#             for i in top_idx:
-#                 top_predictions.append({
-#                     "label":CLASS_NAMES[i],
-#                     "confidence":round(float(preds[i])*100,2)
-#                 })
-
-#             return render_template("index.html",
-#                 image_url=url_for("static",filename=f"uploads/{filename}"),
-#                 interpretation=interpretation,
-#                 predictions=top_predictions,
-#                 top_confidence=round(confidence,2)
-#             )
-
-#         except Exception as e:
-#             print("ERROR:",e)
-#             flash("Error processing image","danger")
-#             return redirect(request.url)
-
-#     return render_template("index.html")
-
-# # ------------------------
-# # RUN
-# # ------------------------
-# if __name__=="__main__":
-#     app.run(debug=True, port=5003)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -306,6 +19,7 @@ takes over, so every image gets a *distinct*, evidence-based diagnosis.
 import os
 import math
 from uuid import uuid4
+import gdown
 
 import cv2
 import numpy as np
@@ -321,13 +35,34 @@ from tensorflow.keras.applications.mobilenet_v2 import (
     decode_predictions,
 )
 
+
+
+# # ═══════════════════════════════════════════════════
+# #  CONFIGURATION
+# # ═══════════════════════════════════════════════════
+# BASE_DIR      = os.path.abspath(os.path.dirname(__file__))
+# MODEL_PATH    = os.path.join(BASE_DIR, "vgg16_crop_model.h5")
+# UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
+# ALLOWED_EXT   = {"png", "jpg", "jpeg", "JPG", "PNG", "JPEG"}
+
+
 # ═══════════════════════════════════════════════════
-#  CONFIGURATION
+# CONFIGURATION
 # ═══════════════════════════════════════════════════
-BASE_DIR      = os.path.abspath(os.path.dirname(__file__))
-MODEL_PATH    = os.path.join(BASE_DIR, "vgg16_crop_model.h5")
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "vgg16_crop_model.h5")
+
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
-ALLOWED_EXT   = {"png", "jpg", "jpeg", "JPG", "PNG", "JPEG"}
+ALLOWED_EXT = {"png", "jpg", "jpeg", "JPG", "PNG", "JPEG"}
+
+# Google Drive model link
+MODEL_URL = "https://drive.google.com/uc?id=1pfJ0FnBK4jcWIeHYs1u0JxpIRGGbzUCq"
+
+# ✅ Download model if not exists
+if not os.path.exists(MODEL_PATH):
+    print("[CropMD] Downloading model from Google Drive...")
+    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+
 
 # Below this confidence the pixel engine is used instead of the deep model
 MIN_DL_CONFIDENCE = 45.0   # percent
