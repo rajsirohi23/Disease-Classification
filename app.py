@@ -27,6 +27,9 @@ from PIL import Image
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 # import tensorflow as tf
 # from tensorflow.keras.models import load_model
 # from tensorflow.keras.applications.mobilenet_v2 import (
